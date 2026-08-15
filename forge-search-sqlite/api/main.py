@@ -74,23 +74,27 @@ WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
 WIKIPEDIA_TIMEOUT = 5
 
 # 4get — free, open-source metasearch engine (proxies Google/Bing/DuckDuckGo/
-# Brave/etc. and returns combined JSON). No API key needed on the public
-# instance. Some instances rate-limit anonymous requests to 100/24hr unless
-# you provide a "pass" token (obtained by solving a captcha on the instance's
-# site) — set FOURGET_PASS if you have one. Self-host your own instance
-# (https://git.lolcat.ca/lolcat/4get) for unlimited use with no rate limit.
-FOURGET_BASE_URL = os.environ.get("FOURGET_BASE_URL", "https://4get.ca")
-FOURGET_PASS = os.environ.get("FOURGET_PASS")  # optional
+# Brave/etc. and returns combined JSON). The public 4get.ca instance now
+# requires a "pass" token for API access (as of Aug 2026), so we don't hit
+# it by default anymore — it just 401s. If you get your own pass token, or
+# stand up your own instance (https://git.lolcat.ca/lolcat/4get), set both
+# FOURGET_BASE_URL and FOURGET_PASS as environment variables and this tier
+# will activate automatically. Until then it's skipped, and Wikipedia is
+# the real fallback tier.
+FOURGET_BASE_URL = os.environ.get("FOURGET_BASE_URL")  # unset by default
+FOURGET_PASS = os.environ.get("FOURGET_PASS")
 FOURGET_TIMEOUT = 8
 
 
 def fourget_fallback(q: str, limit: int = 5) -> list[dict]:
     """
-    Real web search results via 4get, a metasearch proxy that itself queries
-    multiple real engines (DuckDuckGo by default) and returns JSON. This is
-    the "give me something no matter what" tier — genuine web results, not
-    just our own crawled index or Wikipedia.
+    Real web search results via 4get. Only runs if FOURGET_BASE_URL is
+    explicitly set (see note above) — otherwise skipped entirely so we
+    don't waste a request hitting a known-401 endpoint on every search.
     """
+    if not FOURGET_BASE_URL:
+        return []
+
     try:
         cookies = {"pass": FOURGET_PASS} if FOURGET_PASS else {}
         resp = requests.get(
