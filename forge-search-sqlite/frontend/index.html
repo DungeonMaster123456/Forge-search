@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge-Search</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0F1210;
+    --bg-raised: #171B18;
+    --border: #262B27;
+    --ember: #E8703A;
+    --ember-dim: #E8703A33;
+    --highlight: #F4C95D;
+    --steel: #8A9290;
+    --text: #E9ECE9;
+    --text-dim: #B4BAB6;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', -apple-system, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12vh 20px 40px;
+    transition: padding-top 0.4s ease;
+  }
+
+  body.has-results { padding-top: 6vh; }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 36px;
+    user-select: none;
+  }
+
+  .brand .mark {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 28px;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+
+  .brand .mark .dash { color: var(--ember); }
+
+  .brand .tagline {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--steel);
+    letter-spacing: 0.5px;
+  }
+
+  .search-shell {
+    width: 100%;
+    max-width: 620px;
+    position: relative;
+  }
+
+  .search-box {
+    position: relative;
+    border-radius: 10px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    transition: border-color 0.25s ease, box-shadow 0.4s ease;
+  }
+
+  .search-box::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: 11px;
+    padding: 1px;
+    background: linear-gradient(135deg, var(--ember), transparent 40%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+  }
+
+  .search-box:focus-within {
+    border-color: transparent;
+    box-shadow: 0 0 0 1px var(--ember-dim), 0 0 24px -4px var(--ember-dim);
+  }
+
+  .search-box:focus-within::before { opacity: 1; }
+
+  #q {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 16px;
+    padding: 16px 48px 16px 20px;
+  }
+
+  #q::placeholder { color: var(--steel); }
+
+  .search-icon {
+    position: absolute;
+    right: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--steel);
+    pointer-events: none;
+  }
+
+  #status {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--steel);
+    margin: 14px 4px 0;
+    min-height: 16px;
+    letter-spacing: 0.3px;
+  }
+
+  #status .count { color: var(--ember); font-weight: 600; }
+
+  #results {
+    width: 100%;
+    max-width: 620px;
+    margin-top: 8px;
+  }
+
+  .result {
+    padding: 20px 4px;
+    border-bottom: 1px solid var(--border);
+    animation: rise 0.35s ease backwards;
+  }
+
+  .result:last-child { border-bottom: none; }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .result-domain {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ember);
+    letter-spacing: 0.4px;
+    margin-bottom: 6px;
+  }
+
+  .result a.title {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--text);
+    text-decoration: none;
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .result a.title:hover { color: var(--highlight); }
+
+  .result .snippet {
+    color: var(--text-dim);
+    font-size: 14px;
+    line-height: 1.55;
+    margin-bottom: 8px;
+  }
+
+  .result .meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--steel);
+    display: flex;
+    gap: 14px;
+  }
+
+  .empty-state {
+    text-align: center;
+    color: var(--steel);
+    font-family: var(--mono);
+    font-size: 13px;
+    margin-top: 40px;
+    line-height: 1.8;
+  }
+
+  .empty-state .big {
+    font-size: 15px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+
+  .fallback-banner {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--highlight);
+    background: #F4C95D14;
+    border: 1px solid #F4C95D33;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    line-height: 1.6;
+  }
+
+  .result.is-fallback {
+    opacity: 0.92;
+  }
+
+  .fallback-tag {
+    color: var(--highlight);
+    border: 1px solid #F4C95D55;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 10px;
+    margin-left: 6px;
+  }
+
+  ::selection { background: var(--ember-dim); color: var(--text); }
+</style>
+</head>
+<body>
+  <div class="brand">
+    <span class="mark">forge<span class="dash">-</span>search</span>
+    <span class="tagline">// self-hosted index</span>
+  </div>
+
+  <div class="search-shell">
+    <div class="search-box">
+      <input id="q" type="text" placeholder="search the index…" autofocus autocomplete="off">
+      <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="7"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    </div>
+    <p id="status"></p>
+  </div>
+
+  <div id="results"></div>
+
+<script>
+  // Point this at your deployed API (Render URL) or http://localhost:8000 locally
+  const API_BASE = "http://localhost:8000";
+
+  const input = document.getElementById("q");
+  const resultsEl = document.getElementById("results");
+  const statusEl = document.getElementById("status");
+  let timer;
+
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(runSearch, 300);
+  });
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str || "";
+    return div.innerHTML;
+  }
+
+  function getDomain(url) {
+    try { return new URL(url).hostname.replace(/^www\./, ""); }
+    catch { return url; }
+  }
+
+  async function runSearch() {
+    const q = input.value.trim();
+    if (!q) {
+      resultsEl.innerHTML = "";
+      statusEl.innerHTML = "";
+      document.body.classList.remove("has-results");
+      return;
+    }
+
+    document.body.classList.add("has-results");
+    statusEl.innerHTML = "searching…";
+
+    try {
+      const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+
+      if (data.count === 0) {
+        statusEl.innerHTML = `<span class="count">0</span> results`;
+        resultsEl.innerHTML = `
+          <div class="empty-state">
+            <div class="big">nothing found, even in fallback</div>
+            try a different term, or grow the index with more crawls
+          </div>`;
+        return;
+      }
+
+      const isFallback = data.source && data.source.startsWith("fallback");
+      statusEl.innerHTML = isFallback
+        ? `<span class="count">0</span> results in our index — showing <span class="count">${data.count}</span> fallback result${data.count === 1 ? "" : "s"}`
+        : `<span class="count">${data.count}</span> result${data.count === 1 ? "" : "s"}`;
+
+      const fallbackLabels = {
+        "fallback-web": "these results are from an external web search (4get), not our own crawled index",
+        "fallback-wiki": "these results are from Wikipedia, not our own crawled index",
+        "fallback-link": "our index and web fallback had nothing — here's a link to search the open web directly",
+      };
+      const fallbackTags = {
+        "fallback-web": "web fallback",
+        "fallback-wiki": "wikipedia",
+        "fallback-link": "link out",
+      };
+
+      const banner = isFallback ? `
+        <div class="fallback-banner">
+          our database doesn't know this yet — ${fallbackLabels[data.source] || "these are fallback results"}
+        </div>` : "";
+
+      resultsEl.innerHTML = banner + data.results.map((r, i) => `
+        <div class="result ${isFallback ? 'is-fallback' : ''}" style="animation-delay: ${i * 40}ms">
+          <div class="result-domain">${escapeHtml(getDomain(r.url))}${isFallback ? ` <span class="fallback-tag">${fallbackTags[data.source] || "fallback"}</span>` : ''}</div>
+          <a class="title" href="${r.url}" target="_blank" rel="noopener">${escapeHtml(r.title || r.url)}</a>
+          <div class="snippet">${escapeHtml(r.snippet || r.description || "")}</div>
+          ${isFallback ? "" : `<div class="meta">
+            <span>score ${Number(r.score).toFixed(2)}</span>
+            <span>${r.inbound_links} inbound link${r.inbound_links === 1 ? "" : "s"}</span>
+          </div>`}
+        </div>
+      `).join("");
+    } catch (e) {
+      statusEl.innerHTML = `<span style="color:#E8703A">connection failed</span> — is the API running on ${API_BASE}?`;
+      resultsEl.innerHTML = "";
+    }
+  }
+</script>
+</body>
+</html>
