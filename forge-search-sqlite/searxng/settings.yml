@@ -11,7 +11,7 @@ general:
 server:
   # Render terminates TLS at its edge and proxies plain HTTP internally,
   # so we disable SearXNG's own secure-cookie/TLS assumptions here.
-  secret_key: "change-this-to-a-random-string-before-deploying"
+  secret_key: "f3a9c1e7b6d84205a1c9e3f7b0d2846f9e1a7c3b5d09214e8f6a3c7b1d95e02"
   limiter: false          # single-user instance -- no need to rate-limit ourselves
   image_proxy: false
 
