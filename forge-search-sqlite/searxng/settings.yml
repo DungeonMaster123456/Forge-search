@@ -1,0 +1,39 @@
+use_default_settings: true
+
+general:
+  instance_name: "forge-search-fallback"
+  # Not shown publicly by design -- this instance exists only to serve
+  # Forge-Search's own API, not to be browsed directly.
+  privacypolicy_url: false
+  donation_url: false
+  contact_url: false
+
+server:
+  # Render terminates TLS at its edge and proxies plain HTTP internally,
+  # so we disable SearXNG's own secure-cookie/TLS assumptions here.
+  secret_key: "change-this-to-a-random-string-before-deploying"
+  limiter: false          # single-user instance -- no need to rate-limit ourselves
+  image_proxy: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "en"
+  formats:
+    - html
+    - json          # <-- the actual fix: this is off by default, which is
+                     #     why every public instance 403'd our JSON requests
+
+# Keep only a handful of reliable, no-key-needed engines active. Fewer
+# engines = faster responses and fewer places for a single request to fail.
+engines:
+  - name: duckduckgo
+    disabled: false
+  - name: wikipedia
+    disabled: false
+  - name: bing
+    disabled: false
+  - name: brave
+    disabled: true
+  - name: google
+    disabled: false
