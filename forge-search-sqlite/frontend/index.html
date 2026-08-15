@@ -250,7 +250,7 @@
 
 <script>
   // Point this at your deployed API (Render URL) or http://localhost:8000 locally
-  const API_BASE = "https://forge-search.onrender.com";
+  const API_BASE = "http://localhost:8000";
 
   const input = document.getElementById("q");
   const resultsEl = document.getElementById("results");
@@ -305,7 +305,7 @@
         : `<span class="count">${data.count}</span> result${data.count === 1 ? "" : "s"}`;
 
       const fallbackLabels = {
-        "fallback-web": "these results are from an external web search (4get), not our own crawled index",
+        "fallback-web": "these results are from an external web search (SearXNG), not our own crawled index",
         "fallback-wiki": "these results are from Wikipedia, not our own crawled index",
         "fallback-link": "our index and web fallback had nothing — here's a link to search the open web directly",
       };
