@@ -73,58 +73,61 @@ import requests
 WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
 WIKIPEDIA_TIMEOUT = 5
 
-# 4get — free, open-source metasearch engine (proxies Google/Bing/DuckDuckGo/
-# Brave/etc. and returns combined JSON). The public 4get.ca instance now
-# requires a "pass" token for API access (as of Aug 2026), so we don't hit
-# it by default anymore — it just 401s. If you get your own pass token, or
-# stand up your own instance (https://git.lolcat.ca/lolcat/4get), set both
-# FOURGET_BASE_URL and FOURGET_PASS as environment variables and this tier
-# will activate automatically. Until then it's skipped, and Wikipedia is
-# the real fallback tier.
-FOURGET_BASE_URL = os.environ.get("FOURGET_BASE_URL")  # unset by default
-FOURGET_PASS = os.environ.get("FOURGET_PASS")
-FOURGET_TIMEOUT = 8
+# SearXNG — free, open-source metasearch engine (proxies Google/Bing/
+# DuckDuckGo/Brave/etc.). Verified against the live instance list at
+# https://searx.space/data/instances.json (checked Aug 2026) for high
+# uptime and a working /search endpoint. NOT every public instance has
+# the JSON API format enabled (many disable it), so we try a short list
+# of known-good instances in order and move on if one doesn't cooperate.
+# Set SEARXNG_BASE_URL to override with your own instance.
+SEARXNG_INSTANCES = (
+    [os.environ.get("SEARXNG_BASE_URL")] if os.environ.get("SEARXNG_BASE_URL")
+    else ["https://baresearch.org", "https://etsi.me", "https://priv.au"]
+)
+SEARXNG_TIMEOUT = 8
 
 
-def fourget_fallback(q: str, limit: int = 5) -> list[dict]:
+def searxng_fallback(q: str, limit: int = 5) -> list[dict]:
     """
-    Real web search results via 4get. Only runs if FOURGET_BASE_URL is
-    explicitly set (see note above) — otherwise skipped entirely so we
-    don't waste a request hitting a known-401 endpoint on every search.
+    Real web search results via SearXNG. Tries each instance in
+    SEARXNG_INSTANCES in order; moves to the next if one fails, is down,
+    or has the JSON format disabled (common on public instances).
     """
-    if not FOURGET_BASE_URL:
-        return []
+    for base_url in SEARXNG_INSTANCES:
+        try:
+            resp = requests.get(
+                f"{base_url}/search",
+                params={"q": q, "format": "json"},
+                timeout=SEARXNG_TIMEOUT,
+                headers={"User-Agent": "ForgeSearchBot/0.1 (fallback helper)"},
+            )
+            if resp.status_code == 403:
+                # JSON format disabled on this instance — try the next one
+                print(f"[fallback] SearXNG {base_url} has JSON format disabled (403)")
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            hits = data.get("results", [])
+        except Exception as e:
+            print(f"[fallback] SearXNG {base_url} failed: {type(e).__name__}: {e}")
+            continue
 
-    try:
-        cookies = {"pass": FOURGET_PASS} if FOURGET_PASS else {}
-        resp = requests.get(
-            f"{FOURGET_BASE_URL}/api/v1/web",
-            params={"s": q, "scraper": "ddg"},
-            cookies=cookies,
-            timeout=FOURGET_TIMEOUT,
-            headers={"User-Agent": "ForgeSearchBot/0.1 (fallback helper)"},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        if data.get("status") != "ok":
-            print(f"[fallback] 4get returned status={data.get('status')}")
-            return []
-        hits = data.get("web", [])
-    except Exception as e:
-        print(f"[fallback] 4get request failed: {type(e).__name__}: {e}")
-        return []
+        if not hits:
+            continue
 
-    results = []
-    for hit in hits[:limit]:
-        results.append({
-            "url": hit.get("url", ""),
-            "title": hit.get("title", ""),
-            "description": None,
-            "snippet": hit.get("description", ""),
-            "inbound_links": 0,
-            "score": 0,
-        })
-    return results
+        results = []
+        for hit in hits[:limit]:
+            results.append({
+                "url": hit.get("url", ""),
+                "title": hit.get("title", ""),
+                "description": None,
+                "snippet": hit.get("content", ""),
+                "inbound_links": 0,
+                "score": 0,
+            })
+        return results
+
+    return []
 
 
 def wikipedia_fallback(q: str, limit: int = 5) -> list[dict]:
@@ -240,7 +243,7 @@ def search(q: str = Query(..., min_length=1), limit: int = 10):
         # Every tier is labeled clearly on the frontend — none of it is
         # presented as if it came from our own crawled index.
         if not results:
-            fallback_results = fourget_fallback(q)
+            fallback_results = searxng_fallback(q)
             if fallback_results:
                 results = fallback_results
                 source = "fallback-web"
