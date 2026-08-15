@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Forge-Search</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, sans-serif; max-width: 640px; margin: 80px auto; padding: 0 20px; }
+  h1 { font-weight: 600; letter-spacing: -0.5px; }
+  #q { width: 100%; font-size: 18px; padding: 12px 16px; border-radius: 24px; border: 1px solid #ccc; }
+  .result { margin: 24px 0; }
+  .result a { font-size: 18px; color: #1a0dab; text-decoration: none; }
+  .result a:hover { text-decoration: underline; }
+  .url { color: #006621; font-size: 13px; }
+  .snippet { color: #545454; font-size: 14px; line-height: 1.4; }
+  .meta { color: #999; font-size: 12px; }
+  #status { color: #888; font-size: 14px; }
+</style>
+</head>
+<body>
+  <h1>🔨 Forge-Search</h1>
+  <input id="q" type="text" placeholder="Search tech blogs & dev docs…" autofocus>
+  <p id="status"></p>
+  <div id="results"></div>
+
+<script>
+  // Point this at your deployed API (Render URL) or http://localhost:8000 locally
+  const API_BASE = "http://localhost:8000";
+
+  const input = document.getElementById("q");
+  const resultsEl = document.getElementById("results");
+  const statusEl = document.getElementById("status");
+  let timer;
+
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(runSearch, 300);
+  });
+
+  async function runSearch() {
+    const q = input.value.trim();
+    if (!q) { resultsEl.innerHTML = ""; statusEl.textContent = ""; return; }
+
+    statusEl.textContent = "Searching…";
+    try {
+      const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      statusEl.textContent = `${data.count} result(s)`;
+      resultsEl.innerHTML = data.results.map(r => `
+        <div class="result">
+          <a href="${r.url}" target="_blank">${r.title || r.url}</a>
+          <div class="url">${r.url}</div>
+          <div class="snippet">${r.snippet || r.description || ""}</div>
+          <div class="meta">score: ${Number(r.score).toFixed(3)} · inbound links: ${r.inbound_links}</div>
+        </div>
+      `).join("");
+    } catch (e) {
+      statusEl.textContent = "Error contacting API — is it running?";
+    }
+  }
+</script>
+</body>
+</html>
