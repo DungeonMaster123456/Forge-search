@@ -87,7 +87,7 @@ SEARXNG_INSTANCES = (
 SEARXNG_TIMEOUT = 8
 
 
-def searxng_fallback(q: str, limit: int = 5) -> list[dict]:
+def searxng_fallback(q: str, limit: int = 5, page: int = 1) -> list[dict]:
     """
     Real web search results via SearXNG. Tries each instance in
     SEARXNG_INSTANCES in order; moves to the next if one fails, is down,
@@ -97,7 +97,7 @@ def searxng_fallback(q: str, limit: int = 5) -> list[dict]:
         try:
             resp = requests.get(
                 f"{base_url}/search",
-                params={"q": q, "format": "json"},
+                params={"q": q, "format": "json", "pageno": page},
                 timeout=SEARXNG_TIMEOUT,
                 headers={"User-Agent": "ForgeSearchBot/0.1 (fallback helper)"},
             )
@@ -223,12 +223,12 @@ def knowledge_panel(q: str) -> dict | None:
         return None
 
 
-def searxng_category(q: str, category: str, limit: int = 20) -> list[dict]:
+def searxng_category(q: str, category: str, limit: int = 20, page: int = 1) -> list[dict]:
     """
-    Query SearXNG for a specific category (images, news) instead of the
-    default web results. Only works against a configured SEARXNG_BASE_URL
-    (your own instance) — the public fallback list doesn't reliably
-    support every category, so this is skipped if unset.
+    Query SearXNG for a specific category (images, news, videos) instead of
+    the default web results, with pagination support. Only works against a
+    configured SEARXNG_BASE_URL (your own instance) — the public fallback
+    list doesn't reliably support every category, so this is skipped if unset.
     """
     if not os.environ.get("SEARXNG_BASE_URL"):
         return []
@@ -236,7 +236,7 @@ def searxng_category(q: str, category: str, limit: int = 20) -> list[dict]:
     try:
         resp = requests.get(
             f"{base_url}/search",
-            params={"q": q, "format": "json", "categories": category},
+            params={"q": q, "format": "json", "categories": category, "pageno": page},
             timeout=SEARXNG_TIMEOUT,
             headers={"User-Agent": "ForgeSearchBot/0.1 (category search)"},
         )
@@ -256,6 +256,15 @@ def searxng_category(q: str, category: str, limit: int = 20) -> list[dict]:
                 "thumbnail_url": hit.get("thumbnail_src") or hit.get("img_src", ""),
                 "source": hit.get("source", ""),
             })
+        elif category == "videos":
+            out.append({
+                "title": hit.get("title", ""),
+                "url": hit.get("url", ""),
+                "thumbnail_url": hit.get("thumbnail", ""),
+                "source": hit.get("source", ""),
+                "published": hit.get("publishedDate", ""),
+                "length": hit.get("length", ""),
+            })
         else:  # news
             out.append({
                 "title": hit.get("title", ""),
@@ -267,7 +276,7 @@ def searxng_category(q: str, category: str, limit: int = 20) -> list[dict]:
     return out
 
 
-def run_search(conn, fts_query: str, limit: int):
+def run_search(conn, fts_query: str, limit: int, offset: int = 0):
     return conn.execute(
         """
         SELECT p.url, p.title, p.description, p.body_text, p.inbound_links,
@@ -276,24 +285,27 @@ def run_search(conn, fts_query: str, limit: int):
         JOIN pages p ON p.id = pages_fts.rowid
         WHERE pages_fts MATCH ?
         ORDER BY (bm25(pages_fts) * -1) + (MIN(p.inbound_links, 20) * 0.05) DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
         """,
-        (fts_query, limit),
+        (fts_query, limit, offset),
     ).fetchall()
 
 
 @app.get("/search")
-def search(q: str = Query(..., min_length=1), limit: int = 10):
+def search(q: str = Query(..., min_length=1), limit: int = 10, page: int = 1):
+    offset = (page - 1) * limit
     conn = get_connection()
     try:
         # First try an exact match (all terms required) — most precise.
         exact_query = build_fts_query(q, mode="exact")
-        rows = run_search(conn, exact_query, limit)
+        rows = run_search(conn, exact_query, limit, offset)
 
         # Nothing found? Fall back to a looser match: any term, as a prefix.
-        if not rows:
+        # (Only on page 1 — fuzzy fallback on later pages of an empty exact
+        # match would show confusing, unrelated "page 3" results.)
+        if not rows and page == 1:
             fuzzy_query = build_fts_query(q, mode="fuzzy")
-            rows = run_search(conn, fuzzy_query, limit)
+            rows = run_search(conn, fuzzy_query, limit, offset)
 
         index_results = []
         for r in rows:
@@ -312,13 +324,13 @@ def search(q: str = Query(..., min_length=1), limit: int = 10):
         # only as a last resort. Each result is tagged with where it came
         # from so the frontend can label sections separately.
         web_results = []
-        for r in searxng_fallback(q, limit=limit):
+        for r in searxng_fallback(q, limit=limit, page=page):
             r["source"] = "web"
             web_results.append(r)
 
         wiki_results = []
         fallback_link = []
-        if not index_results and not web_results:
+        if not index_results and not web_results and page == 1:
             wiki_hits = wikipedia_fallback(q, limit=limit)
             for r in wiki_hits:
                 r["source"] = "wiki"
@@ -328,7 +340,7 @@ def search(q: str = Query(..., min_length=1), limit: int = 10):
                     r["source"] = "link"
                     fallback_link.append(r)
 
-        panel = knowledge_panel(q)
+        panel = knowledge_panel(q) if page == 1 else None
 
         total = len(index_results) + len(web_results) + len(wiki_results) + len(fallback_link)
 
@@ -342,7 +354,13 @@ def search(q: str = Query(..., min_length=1), limit: int = 10):
 
     return {
         "query": q,
+        "page": page,
         "count": total,
+        # has_more is a best-effort signal: if either source returned a full
+        # page, there's probably more — used by the frontend to show/hide
+        # the "Next page" button rather than promising an exact total count
+        # (search engines never really know the true total cheaply).
+        "has_more": len(index_results) >= limit or len(web_results) >= limit,
         "index_results": index_results,
         "web_results": web_results,
         "wiki_results": wiki_results,
@@ -352,13 +370,21 @@ def search(q: str = Query(..., min_length=1), limit: int = 10):
 
 
 @app.get("/search/images")
-def search_images(q: str = Query(..., min_length=1), limit: int = 20):
-    return {"query": q, "results": searxng_category(q, "images", limit)}
+def search_images(q: str = Query(..., min_length=1), limit: int = 20, page: int = 1):
+    results = searxng_category(q, "images", limit, page)
+    return {"query": q, "page": page, "has_more": len(results) >= limit, "results": results}
 
 
 @app.get("/search/news")
-def search_news(q: str = Query(..., min_length=1), limit: int = 20):
-    return {"query": q, "results": searxng_category(q, "news", limit)}
+def search_news(q: str = Query(..., min_length=1), limit: int = 20, page: int = 1):
+    results = searxng_category(q, "news", limit, page)
+    return {"query": q, "page": page, "has_more": len(results) >= limit, "results": results}
+
+
+@app.get("/search/videos")
+def search_videos(q: str = Query(..., min_length=1), limit: int = 20, page: int = 1):
+    results = searxng_category(q, "videos", limit, page)
+    return {"query": q, "page": page, "has_more": len(results) >= limit, "results": results}
 
 
 @app.get("/knowledge")
