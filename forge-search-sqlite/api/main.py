@@ -193,6 +193,80 @@ def guaranteed_fallback(q: str) -> list[dict]:
     }]
 
 
+def knowledge_panel(q: str) -> dict | None:
+    """
+    Wikipedia summary for a query — powers the right-side "knowledge panel"
+    (title, extract, infobox-style key facts, thumbnail) similar to what
+    Google/SearXNG show for companies, people, and well-known topics.
+    Returns None if there's no clean Wikipedia match (most queries won't
+    have one, which is normal — the panel is optional, not required).
+    """
+    try:
+        resp = requests.get(
+            "https://en.wikipedia.org/api/rest_v1/page/summary/" + requests.utils.quote(q),
+            timeout=WIKIPEDIA_TIMEOUT,
+            headers={"User-Agent": "ForgeSearchBot/0.1 (knowledge panel)"},
+        )
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        if data.get("type") == "disambiguation":
+            return None
+        return {
+            "title": data.get("title"),
+            "extract": data.get("extract"),
+            "thumbnail": (data.get("thumbnail") or {}).get("source"),
+            "url": (data.get("content_urls", {}).get("desktop") or {}).get("page"),
+        }
+    except Exception as e:
+        print(f"[knowledge] lookup failed: {type(e).__name__}: {e}")
+        return None
+
+
+def searxng_category(q: str, category: str, limit: int = 20) -> list[dict]:
+    """
+    Query SearXNG for a specific category (images, news) instead of the
+    default web results. Only works against a configured SEARXNG_BASE_URL
+    (your own instance) — the public fallback list doesn't reliably
+    support every category, so this is skipped if unset.
+    """
+    if not os.environ.get("SEARXNG_BASE_URL"):
+        return []
+    base_url = os.environ["SEARXNG_BASE_URL"]
+    try:
+        resp = requests.get(
+            f"{base_url}/search",
+            params={"q": q, "format": "json", "categories": category},
+            timeout=SEARXNG_TIMEOUT,
+            headers={"User-Agent": "ForgeSearchBot/0.1 (category search)"},
+        )
+        resp.raise_for_status()
+        hits = resp.json().get("results", [])
+    except Exception as e:
+        print(f"[{category}] SearXNG request failed: {type(e).__name__}: {e}")
+        return []
+
+    out = []
+    for hit in hits[:limit]:
+        if category == "images":
+            out.append({
+                "title": hit.get("title", ""),
+                "url": hit.get("url", ""),
+                "image_url": hit.get("img_src", ""),
+                "thumbnail_url": hit.get("thumbnail_src") or hit.get("img_src", ""),
+                "source": hit.get("source", ""),
+            })
+        else:  # news
+            out.append({
+                "title": hit.get("title", ""),
+                "url": hit.get("url", ""),
+                "snippet": hit.get("content", ""),
+                "source": hit.get("source", ""),
+                "published": hit.get("publishedDate", ""),
+            })
+    return out
+
+
 def run_search(conn, fts_query: str, limit: int):
     return conn.execute(
         """
@@ -215,56 +289,81 @@ def search(q: str = Query(..., min_length=1), limit: int = 10):
         # First try an exact match (all terms required) — most precise.
         exact_query = build_fts_query(q, mode="exact")
         rows = run_search(conn, exact_query, limit)
-        fuzzy_used = False
 
         # Nothing found? Fall back to a looser match: any term, as a prefix.
-        # This is what makes "pytho" or a query with one typo/extra word
-        # still return something instead of a hard zero.
         if not rows:
             fuzzy_query = build_fts_query(q, mode="fuzzy")
             rows = run_search(conn, fuzzy_query, limit)
-            fuzzy_used = True
 
-        results = []
+        index_results = []
         for r in rows:
-            results.append({
+            index_results.append({
                 "url": r["url"],
                 "title": r["title"],
                 "description": r["description"],
                 "snippet": make_snippet(r["body_text"], q),
                 "inbound_links": r["inbound_links"],
                 "score": round(-r["bm25_score"], 4),
+                "source": "index",
             })
 
-        source = "index"
+        # Always try SearXNG too (when configured) — our own crawled index
+        # is small, so real web results are shown alongside it rather than
+        # only as a last resort. Each result is tagged with where it came
+        # from so the frontend can label sections separately.
+        web_results = []
+        for r in searxng_fallback(q, limit=limit):
+            r["source"] = "web"
+            web_results.append(r)
 
-        # Our own index still has nothing at all (even fuzzy): try real web
-        # search (Serper) first, then Wikipedia, then a guaranteed link-out.
-        # Every tier is labeled clearly on the frontend — none of it is
-        # presented as if it came from our own crawled index.
-        if not results:
-            fallback_results = searxng_fallback(q)
-            if fallback_results:
-                results = fallback_results
-                source = "fallback-web"
-            else:
-                fallback_results = wikipedia_fallback(q)
-                if fallback_results:
-                    results = fallback_results
-                    source = "fallback-wiki"
-                else:
-                    results = guaranteed_fallback(q)
-                    source = "fallback-link"
+        wiki_results = []
+        fallback_link = []
+        if not index_results and not web_results:
+            wiki_hits = wikipedia_fallback(q, limit=limit)
+            for r in wiki_hits:
+                r["source"] = "wiki"
+                wiki_results.append(r)
+            if not wiki_hits:
+                for r in guaranteed_fallback(q):
+                    r["source"] = "link"
+                    fallback_link.append(r)
+
+        panel = knowledge_panel(q)
+
+        total = len(index_results) + len(web_results) + len(wiki_results) + len(fallback_link)
 
         conn.execute(
             "INSERT INTO search_log (query, result_count) VALUES (?, ?)",
-            (q, len(results)),
+            (q, total),
         )
         conn.commit()
     finally:
         conn.close()
 
-    return {"query": q, "count": len(results), "source": source, "results": results}
+    return {
+        "query": q,
+        "count": total,
+        "index_results": index_results,
+        "web_results": web_results,
+        "wiki_results": wiki_results,
+        "fallback_link": fallback_link,
+        "knowledge_panel": panel,
+    }
+
+
+@app.get("/search/images")
+def search_images(q: str = Query(..., min_length=1), limit: int = 20):
+    return {"query": q, "results": searxng_category(q, "images", limit)}
+
+
+@app.get("/search/news")
+def search_news(q: str = Query(..., min_length=1), limit: int = 20):
+    return {"query": q, "results": searxng_category(q, "news", limit)}
+
+
+@app.get("/knowledge")
+def knowledge(q: str = Query(..., min_length=1)):
+    return {"query": q, "panel": knowledge_panel(q)}
 
 
 @app.post("/fetch")
