@@ -19,6 +19,13 @@
     --text-dim: #B4BAB6;
     --mono: 'JetBrains Mono', monospace;
     --sans: 'Inter', -apple-system, sans-serif;
+    /* Jarvis accent — a soft multi-hue gradient, distinct from the forge/
+       ember palette used everywhere else, so the AI feature reads as its
+       own moment rather than reskinning the whole app. */
+    --jarvis-1: #4C8DFF;
+    --jarvis-2: #A855F7;
+    --jarvis-3: #EC4899;
+    --jarvis-gradient: linear-gradient(120deg, var(--jarvis-1), var(--jarvis-2) 50%, var(--jarvis-3));
   }
 
   * { box-sizing: border-box; }
@@ -318,6 +325,230 @@
   .next-page-btn:hover { opacity: 0.9; }
   .next-page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
+  /* People also ask */
+  .paa-section { margin: 28px 0; }
+
+  .paa-item {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    background: var(--bg-raised);
+  }
+
+  .paa-question {
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14.5px;
+    font-weight: 500;
+    padding: 14px 16px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .paa-question .chev {
+    color: var(--steel);
+    transition: transform 0.25s ease;
+    flex-shrink: 0;
+  }
+
+  .paa-item.open .paa-question .chev { transform: rotate(180deg); }
+
+  .paa-answer {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    padding: 0 16px;
+  }
+
+  .paa-item.open .paa-answer { max-height: 300px; padding: 0 16px 16px; }
+
+  /* Jarvis — Gemini-style AI panel */
+  .jarvis-trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 8px 14px;
+    margin: 24px 0;
+    cursor: pointer;
+    width: fit-content;
+  }
+
+  .jarvis-trigger:hover { border-color: var(--jarvis-2); }
+
+  .jarvis-orb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--jarvis-gradient);
+    flex-shrink: 0;
+    animation: orb-pulse 3s ease-in-out infinite;
+  }
+
+  @keyframes orb-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.12); opacity: 0.85; }
+  }
+
+  .jarvis-panel {
+    position: fixed;
+    top: 0;
+    right: -420px;
+    width: 400px;
+    max-width: 92vw;
+    height: 100vh;
+    background: var(--bg-raised);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    transition: right 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 100;
+  }
+
+  .jarvis-panel.open { right: 0; }
+
+  .jarvis-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .jarvis-header .title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 15px;
+    background: var(--jarvis-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .jarvis-close {
+    background: none;
+    border: none;
+    color: var(--steel);
+    cursor: pointer;
+    padding: 4px;
+  }
+
+  .jarvis-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .jmsg {
+    max-width: 88%;
+    font-size: 14px;
+    line-height: 1.55;
+    padding: 12px 14px;
+    border-radius: 14px;
+    animation: rise 0.3s ease backwards;
+  }
+
+  .jmsg.user {
+    align-self: flex-end;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .jmsg.assistant {
+    align-self: flex-start;
+    background: linear-gradient(135deg, #4C8DFF14, #A855F714);
+    border: 1px solid #A855F733;
+    color: var(--text-dim);
+  }
+
+  .jmsg.assistant.loading { display: flex; gap: 5px; align-items: center; }
+
+  .jdot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--jarvis-2);
+    animation: jdot-bounce 1.2s ease-in-out infinite;
+  }
+
+  .jdot:nth-child(2) { animation-delay: 0.15s; }
+  .jdot:nth-child(3) { animation-delay: 0.3s; }
+
+  @keyframes jdot-bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+    30% { transform: translateY(-4px); opacity: 1; }
+  }
+
+  .jarvis-input-row {
+    display: flex;
+    gap: 8px;
+    padding: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  #jarvisInput {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 10px 16px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13.5px;
+    outline: none;
+  }
+
+  #jarvisInput:focus { border-color: var(--jarvis-2); }
+
+  .jarvis-send {
+    background: var(--jarvis-gradient);
+    border: none;
+    border-radius: 50%;
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+  }
+
+  .jarvis-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .jarvis-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #00000066;
+    z-index: 99;
+  }
+
+  .jarvis-overlay.open { display: block; }
+
   ::selection { background: var(--ember-dim); color: var(--text); }
 </style>
 </head>
@@ -348,6 +579,28 @@
     <div id="results"></div>
   </div>
   <div class="image-grid" id="imageGrid" style="display:none;"></div>
+
+  <div class="jarvis-overlay" id="jarvisOverlay"></div>
+  <div class="jarvis-panel" id="jarvisPanel">
+    <div class="jarvis-header">
+      <div class="title">
+        <span class="jarvis-orb"></span>
+        Jarvis
+      </div>
+      <button class="jarvis-close" id="jarvisClose">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="jarvis-messages" id="jarvisMessages"></div>
+    <div class="jarvis-input-row">
+      <input id="jarvisInput" type="text" placeholder="Ask Jarvis anything…" autocomplete="off">
+      <button class="jarvis-send" id="jarvisSend">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
 
 <script>
   const API_BASE = "https://forge-search.onrender.com";
@@ -461,6 +714,12 @@
 
       let html = "";
 
+      html += `
+        <div class="jarvis-trigger" id="jarvisTrigger">
+          <span class="jarvis-orb"></span>
+          Ask Jarvis about "${escapeHtml(q)}"
+        </div>`;
+
       if (data.index_results.length) {
         html += `<div class="section-label">Your index</div>`;
         html += data.index_results.map(r => resultCard(r, false)).join("");
@@ -478,6 +737,8 @@
         html += data.fallback_link.map(r => resultCard(r, true)).join("");
       }
 
+      html += renderPeopleAlsoAsk(data.people_also_ask);
+
       if (!html) {
         html = `<div class="empty-state"><div class="big">nothing found</div>try a different term</div>`;
       } else {
@@ -486,6 +747,9 @@
 
       resultsEl.innerHTML = html;
       wirePagination((p) => { currentPage = p; runWebSearch(q); });
+
+      const trigger = document.getElementById("jarvisTrigger");
+      if (trigger) trigger.addEventListener("click", () => openJarvis(q));
 
       // Knowledge panel (only shown on page 1)
       contentLayout.classList.toggle("with-panel", !!data.knowledge_panel);
@@ -626,6 +890,115 @@
       statusEl.innerHTML = `<span style="color:#E8703A">connection failed</span>`;
     }
   }
+
+  // ---- People Also Ask ----
+  function renderPeopleAlsoAsk(paa) {
+    if (!paa || !paa.length) return "";
+    const items = paa.map((item, i) => `
+      <div class="paa-item" data-idx="${i}">
+        <button class="paa-question">
+          ${escapeHtml(item.question)}
+          <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="paa-answer">${escapeHtml(item.answer)}</div>
+      </div>
+    `).join("");
+    return `<div class="paa-section"><div class="section-label">People also ask</div>${items}</div>`;
+  }
+
+  // Delegate clicks for PAA accordion — works even though items are
+  // re-rendered on every search (event delegation on a stable ancestor).
+  document.addEventListener("click", (e) => {
+    const q = e.target.closest(".paa-question");
+    if (!q) return;
+    q.closest(".paa-item").classList.toggle("open");
+  });
+
+  // ---- Jarvis (Gemini-style conversational assistant) ----
+  const jarvisPanel = document.getElementById("jarvisPanel");
+  const jarvisOverlay = document.getElementById("jarvisOverlay");
+  const jarvisMessages = document.getElementById("jarvisMessages");
+  const jarvisInput = document.getElementById("jarvisInput");
+  const jarvisSend = document.getElementById("jarvisSend");
+  const jarvisClose = document.getElementById("jarvisClose");
+
+  let jarvisHistory = [];
+  let jarvisOpenedForQuery = null;
+
+  function openJarvis(seedQuery) {
+    jarvisPanel.classList.add("open");
+    jarvisOverlay.classList.add("open");
+    // Only seed a fresh conversation if this is a NEW search query —
+    // reopening the panel for the same query keeps existing chat history,
+    // matching Gemini's "keep chatting" continuity.
+    if (seedQuery && seedQuery !== jarvisOpenedForQuery) {
+      jarvisOpenedForQuery = seedQuery;
+      jarvisHistory = [];
+      jarvisMessages.innerHTML = "";
+      sendToJarvis(seedQuery, true);
+    }
+    jarvisInput.focus();
+  }
+
+  function closeJarvis() {
+    jarvisPanel.classList.remove("open");
+    jarvisOverlay.classList.remove("open");
+  }
+
+  jarvisClose.addEventListener("click", closeJarvis);
+  jarvisOverlay.addEventListener("click", closeJarvis);
+
+  function addJarvisMessage(role, text, isLoading) {
+    const el = document.createElement("div");
+    el.className = `jmsg ${role}${isLoading ? " loading" : ""}`;
+    el.innerHTML = isLoading
+      ? `<span class="jdot"></span><span class="jdot"></span><span class="jdot"></span>`
+      : escapeHtml(text);
+    jarvisMessages.appendChild(el);
+    jarvisMessages.scrollTop = jarvisMessages.scrollHeight;
+    return el;
+  }
+
+  async function sendToJarvis(text, isAutoSeed) {
+    if (!isAutoSeed) addJarvisMessage("user", text);
+    const loadingEl = addJarvisMessage("assistant", "", true);
+    jarvisSend.disabled = true;
+
+    try {
+      const res = await fetch(`${API_BASE}/jarvis`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: text, history: jarvisHistory }),
+      });
+      const data = await res.json();
+
+      loadingEl.classList.remove("loading");
+      if (data.reply) {
+        loadingEl.textContent = data.reply;
+        jarvisHistory.push({ role: "user", content: text });
+        jarvisHistory.push({ role: "assistant", content: data.reply });
+      } else {
+        loadingEl.textContent = data.error || "Something went wrong.";
+      }
+    } catch (e) {
+      loadingEl.classList.remove("loading");
+      loadingEl.textContent = "Connection failed — is the API running?";
+    } finally {
+      jarvisSend.disabled = false;
+      jarvisMessages.scrollTop = jarvisMessages.scrollHeight;
+    }
+  }
+
+  jarvisSend.addEventListener("click", () => {
+    const text = jarvisInput.value.trim();
+    if (!text) return;
+    jarvisInput.value = "";
+    sendToJarvis(text, false);
+  });
+
+  jarvisInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") jarvisSend.click();
+  });
 </script>
 </body>
 </html>
