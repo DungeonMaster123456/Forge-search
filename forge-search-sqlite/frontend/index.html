@@ -273,6 +273,51 @@
     line-height: 1.6;
   }
 
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 36px;
+    padding-bottom: 20px;
+    width: 100%;
+    max-width: 680px;
+    font-family: var(--mono);
+  }
+
+  .page-num {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 14px;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+
+  .page-num:hover { background: var(--bg-raised); }
+  .page-num.active { color: var(--ember); font-weight: 700; }
+
+  .next-page-btn {
+    background: var(--ember);
+    color: #0F1210;
+    border: none;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 10px 18px;
+    border-radius: 20px;
+    cursor: pointer;
+    margin-left: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .next-page-btn:hover { opacity: 0.9; }
+  .next-page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
   ::selection { background: var(--ember-dim); color: var(--text); }
 </style>
 </head>
@@ -294,6 +339,7 @@
       <button class="tab active" data-tab="web">Web</button>
       <button class="tab" data-tab="images">Images</button>
       <button class="tab" data-tab="news">News</button>
+      <button class="tab" data-tab="videos">Videos</button>
     </div>
     <p id="status"></p>
   </div>
@@ -315,10 +361,11 @@
   let timer;
   let currentTab = "web";
   let lastQuery = "";
+  let currentPage = 1;
 
   input.addEventListener("input", () => {
     clearTimeout(timer);
-    timer = setTimeout(() => runSearch(currentTab), 300);
+    timer = setTimeout(() => { currentPage = 1; runSearch(currentTab); }, 300);
   });
 
   tabsEl.addEventListener("click", (e) => {
@@ -327,6 +374,7 @@
     document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
     btn.classList.add("active");
     currentTab = btn.dataset.tab;
+    currentPage = 1;
     runSearch(currentTab);
   });
 
@@ -339,6 +387,7 @@
     tabsEl.classList.remove("visible");
     document.body.classList.remove("has-results");
     contentLayout.classList.remove("with-panel");
+    currentPage = 1;
     input.focus();
   }
 
@@ -369,7 +418,34 @@
 
     if (tab === "images") return runImageSearch(q);
     if (tab === "news") return runNewsSearch(q);
+    if (tab === "videos") return runVideoSearch(q);
     return runWebSearch(q);
+  }
+
+  function paginationHtml(hasMore) {
+    const buttons = [];
+    // Show a small window of page numbers around the current page, since
+    // we don't know the true total (search engines rarely do cheaply).
+    const start = Math.max(1, currentPage - 4);
+    const end = currentPage + (hasMore ? 5 : 0);
+    for (let p = start; p <= end; p++) {
+      buttons.push(`<button class="page-num ${p === currentPage ? 'active' : ''}" data-page="${p}">${p}</button>`);
+    }
+    return `
+      <div class="pagination">
+        ${buttons.join("")}
+        <button class="next-page-btn" id="nextPageBtn" ${hasMore ? "" : "disabled"}>
+          Next page →
+        </button>
+      </div>`;
+  }
+
+  function wirePagination(onPageChange) {
+    document.querySelectorAll(".page-num").forEach(btn => {
+      btn.addEventListener("click", () => { onPageChange(parseInt(btn.dataset.page, 10)); });
+    });
+    const nextBtn = document.getElementById("nextPageBtn");
+    if (nextBtn) nextBtn.addEventListener("click", () => onPageChange(currentPage + 1));
   }
 
   async function runWebSearch(q) {
@@ -377,11 +453,11 @@
     resultsEl.style.display = "block";
 
     try {
-      const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`);
+      const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}&page=${currentPage}`);
       const data = await res.json();
       if (q !== lastQuery) return; // stale response, ignore
 
-      statusEl.innerHTML = `<span class="count">${data.count}</span> result${data.count === 1 ? "" : "s"}`;
+      statusEl.innerHTML = `<span class="count">${data.count}</span> result${data.count === 1 ? "" : "s"} · page ${currentPage}`;
 
       let html = "";
 
@@ -404,11 +480,14 @@
 
       if (!html) {
         html = `<div class="empty-state"><div class="big">nothing found</div>try a different term</div>`;
+      } else {
+        html += paginationHtml(data.has_more);
       }
 
       resultsEl.innerHTML = html;
+      wirePagination((p) => { currentPage = p; runWebSearch(q); });
 
-      // Knowledge panel
+      // Knowledge panel (only shown on page 1)
       contentLayout.classList.toggle("with-panel", !!data.knowledge_panel);
       const existingPanel = document.querySelector(".panel");
       if (existingPanel) existingPanel.remove();
@@ -454,11 +533,11 @@
     if (existingPanel) existingPanel.remove();
 
     try {
-      const res = await fetch(`${API_BASE}/search/images?q=${encodeURIComponent(q)}`);
+      const res = await fetch(`${API_BASE}/search/images?q=${encodeURIComponent(q)}&page=${currentPage}`);
       const data = await res.json();
       if (q !== lastQuery) return;
 
-      statusEl.innerHTML = `<span class="count">${data.results.length}</span> image${data.results.length === 1 ? "" : "s"}`;
+      statusEl.innerHTML = `<span class="count">${data.results.length}</span> image${data.results.length === 1 ? "" : "s"} · page ${currentPage}`;
 
       if (!data.results.length) {
         imageGridEl.style.display = "none";
@@ -472,7 +551,8 @@
           <img src="${img.thumbnail_url || img.image_url}" alt="${escapeHtml(img.title)}" loading="lazy">
           <div class="cap">${escapeHtml(img.title || img.source || "")}</div>
         </a>
-      `).join("");
+      `).join("") + paginationHtml(data.has_more);
+      wirePagination((p) => { currentPage = p; runImageSearch(q); });
     } catch (e) {
       statusEl.innerHTML = `<span style="color:#E8703A">connection failed</span>`;
     }
@@ -486,11 +566,11 @@
     if (existingPanel) existingPanel.remove();
 
     try {
-      const res = await fetch(`${API_BASE}/search/news?q=${encodeURIComponent(q)}`);
+      const res = await fetch(`${API_BASE}/search/news?q=${encodeURIComponent(q)}&page=${currentPage}`);
       const data = await res.json();
       if (q !== lastQuery) return;
 
-      statusEl.innerHTML = `<span class="count">${data.results.length}</span> article${data.results.length === 1 ? "" : "s"}`;
+      statusEl.innerHTML = `<span class="count">${data.results.length}</span> article${data.results.length === 1 ? "" : "s"} · page ${currentPage}`;
 
       if (!data.results.length) {
         resultsEl.innerHTML = `<div class="empty-state"><div class="big">no news found</div>news search needs SEARXNG_BASE_URL configured on the API</div>`;
@@ -504,7 +584,44 @@
           <div class="snippet">${escapeHtml(n.snippet || "")}</div>
           ${n.published ? `<div class="meta"><span>${escapeHtml(n.published)}</span></div>` : ""}
         </div>
-      `).join("");
+      `).join("") + paginationHtml(data.has_more);
+      wirePagination((p) => { currentPage = p; runNewsSearch(q); });
+    } catch (e) {
+      statusEl.innerHTML = `<span style="color:#E8703A">connection failed</span>`;
+    }
+  }
+
+  async function runVideoSearch(q) {
+    imageGridEl.style.display = "none";
+    resultsEl.style.display = "block";
+    contentLayout.classList.remove("with-panel");
+    const existingPanel = document.querySelector(".panel");
+    if (existingPanel) existingPanel.remove();
+
+    try {
+      const res = await fetch(`${API_BASE}/search/videos?q=${encodeURIComponent(q)}&page=${currentPage}`);
+      const data = await res.json();
+      if (q !== lastQuery) return;
+
+      statusEl.innerHTML = `<span class="count">${data.results.length}</span> video${data.results.length === 1 ? "" : "s"} · page ${currentPage}`;
+
+      if (!data.results.length) {
+        resultsEl.innerHTML = `<div class="empty-state"><div class="big">no videos found</div>video search needs SEARXNG_BASE_URL configured on the API</div>`;
+        return;
+      }
+
+      resultsEl.innerHTML = data.results.map((v, i) => `
+        <div class="result" style="animation-delay:${i * 30}ms">
+          ${v.thumbnail_url ? `<img src="${v.thumbnail_url}" alt="" style="width:100%;max-width:320px;border-radius:8px;margin-bottom:10px;display:block;">` : ""}
+          <div class="result-domain"><img class="favicon" src="${favicon(v.url)}" alt="">${escapeHtml(v.source || getDomain(v.url))}</div>
+          <a class="title" href="${v.url}" target="_blank" rel="noopener">${escapeHtml(v.title)}</a>
+          <div class="meta">
+            ${v.length ? `<span>${escapeHtml(v.length)}</span>` : ""}
+            ${v.published ? `<span>${escapeHtml(v.published)}</span>` : ""}
+          </div>
+        </div>
+      `).join("") + paginationHtml(data.has_more);
+      wirePagination((p) => { currentPage = p; runVideoSearch(q); });
     } catch (e) {
       statusEl.innerHTML = `<span style="color:#E8703A">connection failed</span>`;
     }
