@@ -32,18 +32,19 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 12vh 20px 40px;
+    padding: 12vh 20px 60px;
     transition: padding-top 0.4s ease;
   }
 
-  body.has-results { padding-top: 6vh; }
+  body.has-results { padding-top: 4vh; }
 
   .brand {
     display: flex;
     align-items: baseline;
     gap: 10px;
-    margin-bottom: 36px;
+    margin-bottom: 28px;
     user-select: none;
+    cursor: pointer;
   }
 
   .brand .mark {
@@ -55,19 +56,9 @@
   }
 
   .brand .mark .dash { color: var(--ember); }
+  .brand .tagline { font-family: var(--mono); font-size: 12px; color: var(--steel); letter-spacing: 0.5px; }
 
-  .brand .tagline {
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--steel);
-    letter-spacing: 0.5px;
-  }
-
-  .search-shell {
-    width: 100%;
-    max-width: 620px;
-    position: relative;
-  }
+  .search-shell { width: 100%; max-width: 680px; position: relative; }
 
   .search-box {
     position: relative;
@@ -77,27 +68,10 @@
     transition: border-color 0.25s ease, box-shadow 0.4s ease;
   }
 
-  .search-box::before {
-    content: "";
-    position: absolute;
-    inset: -1px;
-    border-radius: 11px;
-    padding: 1px;
-    background: linear-gradient(135deg, var(--ember), transparent 40%);
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    opacity: 0;
-    transition: opacity 0.4s ease;
-    pointer-events: none;
-  }
-
   .search-box:focus-within {
     border-color: transparent;
     box-shadow: 0 0 0 1px var(--ember-dim), 0 0 24px -4px var(--ember-dim);
   }
-
-  .search-box:focus-within::before { opacity: 1; }
 
   #q {
     width: 100%;
@@ -121,6 +95,30 @@
     pointer-events: none;
   }
 
+  .tabs {
+    display: none;
+    gap: 4px;
+    margin-top: 18px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tabs.visible { display: flex; }
+
+  .tab {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--steel);
+    background: none;
+    border: none;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    letter-spacing: 0.3px;
+  }
+
+  .tab:hover { color: var(--text-dim); }
+  .tab.active { color: var(--ember); border-bottom-color: var(--ember); }
+
   #status {
     font-family: var(--mono);
     font-size: 12px;
@@ -132,11 +130,31 @@
 
   #status .count { color: var(--ember); font-weight: 600; }
 
-  #results {
+  .content-layout {
     width: 100%;
-    max-width: 620px;
+    max-width: 1000px;
     margin-top: 8px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 32px;
   }
+
+  .content-layout.with-panel { grid-template-columns: minmax(0, 680px) 300px; }
+
+  #results { width: 100%; max-width: 680px; }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--steel);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 28px 0 4px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-label:first-child { margin-top: 0; }
 
   .result {
     padding: 20px 4px;
@@ -157,7 +175,12 @@
     color: var(--ember);
     letter-spacing: 0.4px;
     margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
+
+  .favicon { width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; }
 
   .result a.title {
     font-family: var(--sans);
@@ -171,20 +194,9 @@
 
   .result a.title:hover { color: var(--highlight); }
 
-  .result .snippet {
-    color: var(--text-dim);
-    font-size: 14px;
-    line-height: 1.55;
-    margin-bottom: 8px;
-  }
+  .result .snippet { color: var(--text-dim); font-size: 14px; line-height: 1.55; margin-bottom: 8px; }
 
-  .result .meta {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--steel);
-    display: flex;
-    gap: 14px;
-  }
+  .result .meta { font-family: var(--mono); font-size: 11px; color: var(--steel); display: flex; gap: 14px; }
 
   .empty-state {
     text-align: center;
@@ -195,11 +207,59 @@
     line-height: 1.8;
   }
 
-  .empty-state .big {
-    font-size: 15px;
-    color: var(--text-dim);
-    margin-bottom: 6px;
+  .empty-state .big { font-size: 15px; color: var(--text-dim); margin-bottom: 6px; }
+
+  /* Knowledge panel */
+  .panel {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    height: fit-content;
+    animation: rise 0.4s ease backwards;
   }
+
+  .panel img.thumb {
+    width: 100%;
+    max-height: 160px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 14px;
+  }
+
+  .panel h2 { font-size: 19px; margin: 0 0 10px; color: var(--text); }
+  .panel p { font-size: 13.5px; line-height: 1.6; color: var(--text-dim); margin: 0 0 14px; }
+
+  .panel a.source-link {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ember);
+    text-decoration: none;
+  }
+
+  .panel a.source-link:hover { text-decoration: underline; }
+
+  /* Images grid */
+  .image-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+    width: 100%;
+    max-width: 1000px;
+  }
+
+  .image-card {
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    animation: rise 0.35s ease backwards;
+    text-decoration: none;
+    display: block;
+  }
+
+  .image-card img { width: 100%; height: 130px; object-fit: cover; display: block; }
+  .image-card .cap { padding: 8px 10px; font-size: 11px; color: var(--text-dim); }
 
   .fallback-banner {
     font-family: var(--mono);
@@ -213,24 +273,11 @@
     line-height: 1.6;
   }
 
-  .result.is-fallback {
-    opacity: 0.92;
-  }
-
-  .fallback-tag {
-    color: var(--highlight);
-    border: 1px solid #F4C95D55;
-    border-radius: 4px;
-    padding: 1px 6px;
-    font-size: 10px;
-    margin-left: 6px;
-  }
-
   ::selection { background: var(--ember-dim); color: var(--text); }
 </style>
 </head>
 <body>
-  <div class="brand">
+  <div class="brand" onclick="resetHome()">
     <span class="mark">forge<span class="dash">-</span>search</span>
     <span class="tagline">// self-hosted index</span>
   </div>
@@ -243,24 +290,57 @@
         <line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
     </div>
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-tab="web">Web</button>
+      <button class="tab" data-tab="images">Images</button>
+      <button class="tab" data-tab="news">News</button>
+    </div>
     <p id="status"></p>
   </div>
 
-  <div id="results"></div>
+  <div class="content-layout" id="contentLayout">
+    <div id="results"></div>
+  </div>
+  <div class="image-grid" id="imageGrid" style="display:none;"></div>
 
 <script>
-  // Point this at your deployed API (Render URL) or http://localhost:8000 locally
   const API_BASE = "https://forge-search.onrender.com";
 
   const input = document.getElementById("q");
   const resultsEl = document.getElementById("results");
+  const imageGridEl = document.getElementById("imageGrid");
   const statusEl = document.getElementById("status");
+  const tabsEl = document.getElementById("tabs");
+  const contentLayout = document.getElementById("contentLayout");
   let timer;
+  let currentTab = "web";
+  let lastQuery = "";
 
   input.addEventListener("input", () => {
     clearTimeout(timer);
-    timer = setTimeout(runSearch, 300);
+    timer = setTimeout(() => runSearch(currentTab), 300);
   });
+
+  tabsEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".tab");
+    if (!btn) return;
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    btn.classList.add("active");
+    currentTab = btn.dataset.tab;
+    runSearch(currentTab);
+  });
+
+  function resetHome() {
+    input.value = "";
+    resultsEl.innerHTML = "";
+    imageGridEl.style.display = "none";
+    resultsEl.style.display = "block";
+    statusEl.innerHTML = "";
+    tabsEl.classList.remove("visible");
+    document.body.classList.remove("has-results");
+    contentLayout.classList.remove("with-panel");
+    input.focus();
+  }
 
   function escapeHtml(str) {
     const div = document.createElement("div");
@@ -273,67 +353,160 @@
     catch { return url; }
   }
 
-  async function runSearch() {
+  function favicon(url) {
+    const domain = getDomain(url);
+    return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+  }
+
+  async function runSearch(tab) {
     const q = input.value.trim();
-    if (!q) {
-      resultsEl.innerHTML = "";
-      statusEl.innerHTML = "";
-      document.body.classList.remove("has-results");
-      return;
-    }
+    if (!q) { resetHome(); return; }
 
     document.body.classList.add("has-results");
+    tabsEl.classList.add("visible");
     statusEl.innerHTML = "searching…";
+    lastQuery = q;
+
+    if (tab === "images") return runImageSearch(q);
+    if (tab === "news") return runNewsSearch(q);
+    return runWebSearch(q);
+  }
+
+  async function runWebSearch(q) {
+    imageGridEl.style.display = "none";
+    resultsEl.style.display = "block";
 
     try {
       const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
+      if (q !== lastQuery) return; // stale response, ignore
 
-      if (data.count === 0) {
-        statusEl.innerHTML = `<span class="count">0</span> results`;
-        resultsEl.innerHTML = `
-          <div class="empty-state">
-            <div class="big">nothing found, even in fallback</div>
-            try a different term, or grow the index with more crawls
-          </div>`;
+      statusEl.innerHTML = `<span class="count">${data.count}</span> result${data.count === 1 ? "" : "s"}`;
+
+      let html = "";
+
+      if (data.index_results.length) {
+        html += `<div class="section-label">Your index</div>`;
+        html += data.index_results.map(r => resultCard(r, false)).join("");
+      }
+      if (data.web_results.length) {
+        html += `<div class="section-label">Web results</div>`;
+        html += data.web_results.map(r => resultCard(r, false)).join("");
+      }
+      if (data.wiki_results.length) {
+        html += `<div class="fallback-banner">our index and web search had nothing — showing Wikipedia results instead</div>`;
+        html += data.wiki_results.map(r => resultCard(r, true)).join("");
+      }
+      if (data.fallback_link.length) {
+        html += `<div class="fallback-banner">nothing matched anywhere — here's a link to search the open web</div>`;
+        html += data.fallback_link.map(r => resultCard(r, true)).join("");
+      }
+
+      if (!html) {
+        html = `<div class="empty-state"><div class="big">nothing found</div>try a different term</div>`;
+      }
+
+      resultsEl.innerHTML = html;
+
+      // Knowledge panel
+      contentLayout.classList.toggle("with-panel", !!data.knowledge_panel);
+      const existingPanel = document.querySelector(".panel");
+      if (existingPanel) existingPanel.remove();
+      if (data.knowledge_panel) {
+        const p = data.knowledge_panel;
+        const panelEl = document.createElement("div");
+        panelEl.className = "panel";
+        panelEl.innerHTML = `
+          ${p.thumbnail ? `<img class="thumb" src="${p.thumbnail}" alt="">` : ""}
+          <h2>${escapeHtml(p.title || "")}</h2>
+          <p>${escapeHtml(p.extract || "")}</p>
+          ${p.url ? `<a class="source-link" href="${p.url}" target="_blank" rel="noopener">Read more on Wikipedia →</a>` : ""}
+        `;
+        contentLayout.appendChild(panelEl);
+      }
+    } catch (e) {
+      statusEl.innerHTML = `<span style="color:#E8703A">connection failed</span> — is the API running at ${API_BASE}?`;
+      resultsEl.innerHTML = "";
+    }
+  }
+
+  function resultCard(r, isFallback) {
+    return `
+      <div class="result">
+        <div class="result-domain">
+          <img class="favicon" src="${favicon(r.url)}" alt="">
+          ${escapeHtml(getDomain(r.url))}
+        </div>
+        <a class="title" href="${r.url}" target="_blank" rel="noopener">${escapeHtml(r.title || r.url)}</a>
+        <div class="snippet">${escapeHtml(r.snippet || r.description || "")}</div>
+        ${!isFallback && r.score !== undefined ? `<div class="meta">
+          <span>score ${Number(r.score).toFixed(2)}</span>
+          ${r.inbound_links !== undefined ? `<span>${r.inbound_links} inbound link${r.inbound_links === 1 ? "" : "s"}</span>` : ""}
+        </div>` : ""}
+      </div>`;
+  }
+
+  async function runImageSearch(q) {
+    resultsEl.style.display = "none";
+    imageGridEl.style.display = "grid";
+    contentLayout.classList.remove("with-panel");
+    const existingPanel = document.querySelector(".panel");
+    if (existingPanel) existingPanel.remove();
+
+    try {
+      const res = await fetch(`${API_BASE}/search/images?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if (q !== lastQuery) return;
+
+      statusEl.innerHTML = `<span class="count">${data.results.length}</span> image${data.results.length === 1 ? "" : "s"}`;
+
+      if (!data.results.length) {
+        imageGridEl.style.display = "none";
+        resultsEl.style.display = "block";
+        resultsEl.innerHTML = `<div class="empty-state"><div class="big">no images found</div>image search needs SEARXNG_BASE_URL configured on the API</div>`;
         return;
       }
 
-      const isFallback = data.source && data.source.startsWith("fallback");
-      statusEl.innerHTML = isFallback
-        ? `<span class="count">0</span> results in our index — showing <span class="count">${data.count}</span> fallback result${data.count === 1 ? "" : "s"}`
-        : `<span class="count">${data.count}</span> result${data.count === 1 ? "" : "s"}`;
+      imageGridEl.innerHTML = data.results.map((img, i) => `
+        <a class="image-card" href="${img.url}" target="_blank" rel="noopener" style="animation-delay:${i * 30}ms">
+          <img src="${img.thumbnail_url || img.image_url}" alt="${escapeHtml(img.title)}" loading="lazy">
+          <div class="cap">${escapeHtml(img.title || img.source || "")}</div>
+        </a>
+      `).join("");
+    } catch (e) {
+      statusEl.innerHTML = `<span style="color:#E8703A">connection failed</span>`;
+    }
+  }
 
-      const fallbackLabels = {
-        "fallback-web": "these results are from an external web search (SearXNG), not our own crawled index",
-        "fallback-wiki": "these results are from Wikipedia, not our own crawled index",
-        "fallback-link": "our index and web fallback had nothing — here's a link to search the open web directly",
-      };
-      const fallbackTags = {
-        "fallback-web": "web fallback",
-        "fallback-wiki": "wikipedia",
-        "fallback-link": "link out",
-      };
+  async function runNewsSearch(q) {
+    imageGridEl.style.display = "none";
+    resultsEl.style.display = "block";
+    contentLayout.classList.remove("with-panel");
+    const existingPanel = document.querySelector(".panel");
+    if (existingPanel) existingPanel.remove();
 
-      const banner = isFallback ? `
-        <div class="fallback-banner">
-          our database doesn't know this yet — ${fallbackLabels[data.source] || "these are fallback results"}
-        </div>` : "";
+    try {
+      const res = await fetch(`${API_BASE}/search/news?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if (q !== lastQuery) return;
 
-      resultsEl.innerHTML = banner + data.results.map((r, i) => `
-        <div class="result ${isFallback ? 'is-fallback' : ''}" style="animation-delay: ${i * 40}ms">
-          <div class="result-domain">${escapeHtml(getDomain(r.url))}${isFallback ? ` <span class="fallback-tag">${fallbackTags[data.source] || "fallback"}</span>` : ''}</div>
-          <a class="title" href="${r.url}" target="_blank" rel="noopener">${escapeHtml(r.title || r.url)}</a>
-          <div class="snippet">${escapeHtml(r.snippet || r.description || "")}</div>
-          ${isFallback ? "" : `<div class="meta">
-            <span>score ${Number(r.score).toFixed(2)}</span>
-            <span>${r.inbound_links} inbound link${r.inbound_links === 1 ? "" : "s"}</span>
-          </div>`}
+      statusEl.innerHTML = `<span class="count">${data.results.length}</span> article${data.results.length === 1 ? "" : "s"}`;
+
+      if (!data.results.length) {
+        resultsEl.innerHTML = `<div class="empty-state"><div class="big">no news found</div>news search needs SEARXNG_BASE_URL configured on the API</div>`;
+        return;
+      }
+
+      resultsEl.innerHTML = data.results.map((n, i) => `
+        <div class="result" style="animation-delay:${i * 30}ms">
+          <div class="result-domain"><img class="favicon" src="${favicon(n.url)}" alt="">${escapeHtml(n.source || getDomain(n.url))}</div>
+          <a class="title" href="${n.url}" target="_blank" rel="noopener">${escapeHtml(n.title)}</a>
+          <div class="snippet">${escapeHtml(n.snippet || "")}</div>
+          ${n.published ? `<div class="meta"><span>${escapeHtml(n.published)}</span></div>` : ""}
         </div>
       `).join("");
     } catch (e) {
-      statusEl.innerHTML = `<span style="color:#E8703A">connection failed</span> — is the API running on ${API_BASE}?`;
-      resultsEl.innerHTML = "";
+      statusEl.innerHTML = `<span style="color:#E8703A">connection failed</span>`;
     }
   }
 </script>
