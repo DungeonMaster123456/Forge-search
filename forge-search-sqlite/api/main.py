@@ -276,6 +276,86 @@ def searxng_category(q: str, category: str, limit: int = 20, page: int = 1) -> l
     return out
 
 
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_TIMEOUT = 20
+
+
+def groq_chat(messages: list[dict], max_tokens: int = 512) -> str | None:
+    """
+    Thin wrapper around Groq's OpenAI-compatible chat completions endpoint.
+    Returns the assistant's reply text, or None if GROQ_API_KEY isn't set
+    or the request fails for any reason (network, auth, rate limit).
+    Never raises — callers always get either a string or None.
+    """
+    if not GROQ_API_KEY:
+        return None
+    try:
+        resp = requests.post(
+            GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": GROQ_MODEL,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": 0.6,
+            },
+            timeout=GROQ_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print(f"[jarvis] Groq request failed: {type(e).__name__}: {e}")
+        return None
+
+
+def people_also_ask(q: str) -> list[dict]:
+    """
+    Generates a small set of related follow-up questions + short answers,
+    similar to Google's "People also ask" accordion. Uses Groq to generate
+    plausible related questions AND answer them in one structured call, so
+    it's a single request rather than N+1. Returns [] if Groq isn't
+    configured or the call fails — this is a nice-to-have, never blocks
+    the main search results.
+    """
+    reply = groq_chat(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "You generate a 'People also ask' box for a search engine. "
+                    "Given a search query, output exactly 4 related questions "
+                    "a curious searcher might ask next, each with a concise "
+                    "2-3 sentence factual answer. Format STRICTLY as:\n"
+                    "Q: <question>\nA: <answer>\n\n(repeat 4 times, blank line between)"
+                    "\nNo preamble, no numbering, no markdown."
+                ),
+            },
+            {"role": "user", "content": q},
+        ],
+        max_tokens=500,
+    )
+    if not reply:
+        return []
+
+    pairs = []
+    blocks = [b.strip() for b in reply.split("\n\n") if b.strip()]
+    for block in blocks:
+        q_match = re.search(r"Q:\s*(.+)", block)
+        a_match = re.search(r"A:\s*(.+)", block, re.DOTALL)
+        if q_match and a_match:
+            pairs.append({
+                "question": q_match.group(1).strip(),
+                "answer": a_match.group(1).strip(),
+            })
+    return pairs[:4]
+
+
 def run_search(conn, fts_query: str, limit: int, offset: int = 0):
     return conn.execute(
         """
@@ -341,6 +421,7 @@ def search(q: str = Query(..., min_length=1), limit: int = 10, page: int = 1):
                     fallback_link.append(r)
 
         panel = knowledge_panel(q) if page == 1 else None
+        paa = people_also_ask(q) if page == 1 else []
 
         total = len(index_results) + len(web_results) + len(wiki_results) + len(fallback_link)
 
@@ -366,7 +447,54 @@ def search(q: str = Query(..., min_length=1), limit: int = 10, page: int = 1):
         "wiki_results": wiki_results,
         "fallback_link": fallback_link,
         "knowledge_panel": panel,
+        "people_also_ask": paa,
     }
+
+
+@app.post("/jarvis")
+def jarvis(payload: dict):
+    """
+    Jarvis — a conversational AI assistant (Gemini-style "keep chatting"
+    box). Expects JSON body: {"query": "...", "history": [{"role": "user"|
+    "assistant", "content": "..."}]}. History lets the frontend keep the
+    thread going across turns, same as Gemini's follow-up chat.
+    Returns {"reply": "..."} or an error message if GROQ_API_KEY isn't set.
+    """
+    query = (payload or {}).get("query", "").strip()
+    history = (payload or {}).get("history", [])
+    if not query:
+        return {"reply": None, "error": "empty query"}
+
+    if not GROQ_API_KEY:
+        return {
+            "reply": None,
+            "error": "Jarvis isn't configured yet — set GROQ_API_KEY on the API service.",
+        }
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are Jarvis, a helpful, concise AI assistant embedded in "
+                "Forge-Search, a self-hosted search engine. Answer clearly and "
+                "directly. Keep responses focused — a few sentences to a short "
+                "paragraph unless the user asks for more detail."
+            ),
+        }
+    ]
+    # Only pass through well-formed history entries — never trust client
+    # input blindly, even though this is a low-stakes personal project.
+    for turn in history[-10:]:  # cap context to the last 10 turns
+        role = turn.get("role")
+        content = turn.get("content", "")
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": query})
+
+    reply = groq_chat(messages, max_tokens=800)
+    if reply is None:
+        return {"reply": None, "error": "Jarvis request failed — check the API logs."}
+    return {"reply": reply}
 
 
 @app.get("/search/images")
