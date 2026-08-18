@@ -111,6 +111,47 @@
 
   .tabs.visible { display: flex; }
 
+  .tabs-row {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 18px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tabs-row.visible { display: flex; }
+  .tabs-row .tabs { border-bottom: none; margin-top: 0; display: flex; }
+
+  .safesearch-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--steel);
+    transition: all 0.2s ease;
+  }
+
+  .safesearch-toggle.on {
+    color: #4ADE80;
+    border-color: #4ADE8044;
+    background: #4ADE8011;
+  }
+
+  .safesearch-toggle.off {
+    color: var(--highlight);
+    border-color: var(--highlight);
+    background: #F4C95D14;
+  }
+
+  .safesearch-toggle:hover { opacity: 0.85; }
+
   .tab {
     font-family: var(--mono);
     font-size: 13px;
@@ -267,6 +308,40 @@
 
   .image-card img { width: 100%; height: 130px; object-fit: cover; display: block; }
   .image-card .cap { padding: 8px 10px; font-size: 11px; color: var(--text-dim); }
+
+  /* SafeSearch "black wall" — fully opaque, not blurred. Content is not
+     rendered at all underneath (no img src loaded), and only reveals on
+     an explicit click, with a confirmation of what's being unblocked. */
+  .image-card.blocked { position: relative; }
+
+  .image-card.blocked img { display: none; }
+
+  .black-wall {
+    width: 100%;
+    height: 130px;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    border: 1px solid #ffffff11;
+  }
+
+  .black-wall svg { color: #666; }
+  .black-wall .bw-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: #777;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .result.blocked .black-wall {
+    height: 90px;
+    border-radius: 8px;
+  }
 
   .fallback-banner {
     font-family: var(--mono);
@@ -612,12 +687,20 @@
         <line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
     </div>
-    <div class="tabs" id="tabs">
-      <button class="tab active" data-tab="web">Web</button>
-      <button class="tab" data-tab="images">Images</button>
-      <button class="tab" data-tab="news">News</button>
-      <button class="tab" data-tab="videos">Videos</button>
-      <button class="tab" data-tab="shopping">Shopping</button>
+    <div class="tabs-row">
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-tab="web">Web</button>
+        <button class="tab" data-tab="images">Images</button>
+        <button class="tab" data-tab="news">News</button>
+        <button class="tab" data-tab="videos">Videos</button>
+        <button class="tab" data-tab="shopping">Shopping</button>
+      </div>
+      <button class="safesearch-toggle on" id="safeToggle" title="Toggle SafeSearch">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <span id="safeToggleLabel">SafeSearch: On</span>
+      </button>
     </div>
     <p id="status"></p>
   </div>
@@ -657,11 +740,28 @@
   const imageGridEl = document.getElementById("imageGrid");
   const statusEl = document.getElementById("status");
   const tabsEl = document.getElementById("tabs");
+  const tabsRowEl = document.querySelector(".tabs-row");
   const contentLayout = document.getElementById("contentLayout");
+  const safeToggle = document.getElementById("safeToggle");
+  const safeToggleLabel = document.getElementById("safeToggleLabel");
   let timer;
   let currentTab = "web";
   let lastQuery = "";
   let currentPage = 1;
+  // SafeSearch defaults ON. Not persisted across sessions on purpose —
+  // browser storage (localStorage) isn't reliably available in every
+  // context this page might be embedded/opened in, so it simply resets
+  // to the safe default (on) every fresh page load rather than risk
+  // silently staying off.
+  let safeSearchOn = true;
+
+  safeToggle.addEventListener("click", () => {
+    safeSearchOn = !safeSearchOn;
+    safeToggle.classList.toggle("on", safeSearchOn);
+    safeToggle.classList.toggle("off", !safeSearchOn);
+    safeToggleLabel.textContent = `SafeSearch: ${safeSearchOn ? "On" : "Off"}`;
+    if (lastQuery) runSearch(currentTab); // re-run current search with new setting
+  });
 
   input.addEventListener("input", () => {
     clearTimeout(timer);
@@ -684,7 +784,7 @@
     imageGridEl.style.display = "none";
     resultsEl.style.display = "block";
     statusEl.innerHTML = "";
-    tabsEl.classList.remove("visible");
+    tabsRowEl.classList.remove("visible");
     document.body.classList.remove("has-results");
     contentLayout.classList.remove("with-panel");
     currentPage = 1;
@@ -712,7 +812,7 @@
     if (!q) { resetHome(); return; }
 
     document.body.classList.add("has-results");
-    tabsEl.classList.add("visible");
+    tabsRowEl.classList.add("visible");
     statusEl.innerHTML = "searching…";
     lastQuery = q;
 
@@ -754,7 +854,7 @@
     resultsEl.style.display = "block";
 
     try {
-      const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}&page=${currentPage}`);
+      const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}&page=${currentPage}&safe=${safeSearchOn}`);
       const data = await res.json();
       if (q !== lastQuery) return; // stale response, ignore
 
@@ -822,6 +922,15 @@
   }
 
   function resultCard(r, isFallback) {
+    if (r.nsfw) {
+      return `
+        <div class="result blocked">
+          <div class="black-wall" onclick="revealBlocked(this)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span class="bw-label">Blocked by SafeSearch — tap to reveal</span>
+          </div>
+        </div>`;
+    }
     return `
       <div class="result">
         <div class="result-domain">
@@ -837,6 +946,18 @@
       </div>`;
   }
 
+  // Explicit, deliberate reveal — one tap on the black wall itself, not a
+  // hover or auto-reveal. Stores the original result's HTML in a data
+  // attribute so nothing is fetched or rendered until the user acts.
+  window.revealBlocked = function(wallEl) {
+    if (!confirm("This result was blocked by SafeSearch because it may contain adult content. Reveal anyway?")) return;
+    const card = wallEl.closest(".result, .image-card");
+    card.classList.remove("blocked");
+    const img = card.querySelector("img");
+    if (img && img.dataset.realSrc) img.src = img.dataset.realSrc;
+    wallEl.remove();
+  };
+
   async function runImageSearch(q) {
     resultsEl.style.display = "none";
     imageGridEl.style.display = "grid";
@@ -845,7 +966,7 @@
     if (existingPanel) existingPanel.remove();
 
     try {
-      const res = await fetch(`${API_BASE}/search/images?q=${encodeURIComponent(q)}&page=${currentPage}`);
+      const res = await fetch(`${API_BASE}/search/images?q=${encodeURIComponent(q)}&page=${currentPage}&safe=${safeSearchOn}`);
       const data = await res.json();
       if (q !== lastQuery) return;
 
@@ -858,17 +979,48 @@
         return;
       }
 
-      imageGridEl.innerHTML = data.results.map((img, i) => `
-        <a class="image-card" href="${img.url}" target="_blank" rel="noopener" style="animation-delay:${i * 30}ms">
-          <img src="${img.thumbnail_url || img.image_url}" alt="${escapeHtml(img.title)}" loading="lazy">
-          <div class="cap">${escapeHtml(img.title || img.source || "")}</div>
-        </a>
-      `).join("") + paginationHtml(data.has_more);
+      imageGridEl.innerHTML = data.results.map((img, i) => {
+        if (img.nsfw) {
+          // Deliberately no <img src> anywhere in this branch — the actual
+          // image URL is stored in a data attribute and only assigned to
+          // an <img> tag after the user explicitly clicks through. This
+          // guarantees the browser never even requests/loads the image.
+          return `
+            <div class="image-card blocked" style="animation-delay:${i * 30}ms" data-real-src="${escapeHtml(img.thumbnail_url || img.image_url)}" data-url="${escapeHtml(img.url)}" data-title="${escapeHtml(img.title || "")}">
+              <div class="black-wall" onclick="revealBlockedImage(this)">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span class="bw-label">Blocked</span>
+              </div>
+            </div>`;
+        }
+        return `
+          <a class="image-card" href="${img.url}" target="_blank" rel="noopener" style="animation-delay:${i * 30}ms">
+            <img src="${img.thumbnail_url || img.image_url}" alt="${escapeHtml(img.title)}" loading="lazy">
+            <div class="cap">${escapeHtml(img.title || img.source || "")}</div>
+          </a>`;
+      }).join("") + paginationHtml(data.has_more);
       wirePagination((p) => { currentPage = p; runImageSearch(q); });
     } catch (e) {
       statusEl.innerHTML = `<span style="color:#E8703A">connection failed</span>`;
     }
   }
+
+  // Same deliberate, explicit reveal pattern as text results — one click,
+  // one confirmation, only then does the browser fetch the actual image.
+  window.revealBlockedImage = function(wallEl) {
+    if (!confirm("This image was blocked by SafeSearch because it may contain adult content. Reveal anyway?")) return;
+    const card = wallEl.closest(".image-card");
+    const realSrc = card.dataset.realSrc;
+    const url = card.dataset.url;
+    const title = card.dataset.title;
+    const newCard = document.createElement("a");
+    newCard.className = "image-card";
+    newCard.href = url;
+    newCard.target = "_blank";
+    newCard.rel = "noopener";
+    newCard.innerHTML = `<img src="${realSrc}" alt="${title}"><div class="cap">${title}</div>`;
+    card.replaceWith(newCard);
+  };
 
   async function runNewsSearch(q) {
     imageGridEl.style.display = "none";
@@ -878,7 +1030,7 @@
     if (existingPanel) existingPanel.remove();
 
     try {
-      const res = await fetch(`${API_BASE}/search/news?q=${encodeURIComponent(q)}&page=${currentPage}`);
+      const res = await fetch(`${API_BASE}/search/news?q=${encodeURIComponent(q)}&page=${currentPage}&safe=${safeSearchOn}`);
       const data = await res.json();
       if (q !== lastQuery) return;
 
@@ -911,7 +1063,7 @@
     if (existingPanel) existingPanel.remove();
 
     try {
-      const res = await fetch(`${API_BASE}/search/videos?q=${encodeURIComponent(q)}&page=${currentPage}`);
+      const res = await fetch(`${API_BASE}/search/videos?q=${encodeURIComponent(q)}&page=${currentPage}&safe=${safeSearchOn}`);
       const data = await res.json();
       if (q !== lastQuery) return;
 
@@ -947,7 +1099,7 @@
     if (existingPanel) existingPanel.remove();
 
     try {
-      const res = await fetch(`${API_BASE}/search/shopping?q=${encodeURIComponent(q)}&page=${currentPage}`);
+      const res = await fetch(`${API_BASE}/search/shopping?q=${encodeURIComponent(q)}&page=${currentPage}&safe=${safeSearchOn}`);
       const data = await res.json();
       if (q !== lastQuery) return;
 
