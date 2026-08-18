@@ -11,7 +11,7 @@ general:
 server:
   # Render terminates TLS at its edge and proxies plain HTTP internally,
   # so we disable SearXNG's own secure-cookie/TLS assumptions here.
-  secret_key: "f3a9c1e7b6d84205a1c9e3f7b0d2846f9e1a7c3b5d09214e8f6a3c7b1d95e02"
+  secret_key: "change-this-to-a-random-string-before-deploying"
   limiter: false          # single-user instance -- no need to rate-limit ourselves
   image_proxy: false
 
@@ -37,3 +37,21 @@ engines:
     disabled: true
   - name: google
     disabled: false
+
+  # eBay — custom engine for Forge Shopping. SearXNG has no built-in
+  # "shopping" category (verified Aug 2026 — the only real product-search
+  # engine the community has configured is this eBay scraper, sourced from
+  # https://github.com/searxng/searxng/issues/3628). Amazon isn't usable
+  # here: it actively blocks scraping. Real product data from one real
+  # retailer beats fake breadth from none.
+  - name: ebay
+    engine: xpath
+    paging: true
+    shortcut: eb
+    base_url: https://www.ebay.com/sch/i.html?_nkw={query}
+    url_xpath: //h3[@class='s-item__title']/parent::a/@href
+    title_xpath: //h3[@class='s-item__title']
+    content_xpath: //div[@class='s-item__subtitle']
+    disabled: false
+    categories: [shopping]
+    timeout: 10.0
