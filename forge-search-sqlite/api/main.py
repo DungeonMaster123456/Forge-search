@@ -265,6 +265,23 @@ def searxng_category(q: str, category: str, limit: int = 20, page: int = 1) -> l
                 "published": hit.get("publishedDate", ""),
                 "length": hit.get("length", ""),
             })
+        elif category == "shopping":
+            # The eBay engine (see searxng/settings.yml) is a general HTML
+            # scraper, not a structured product API — it doesn't give us a
+            # guaranteed separate price field like a real shopping API would.
+            # We do a best-effort price extraction from the title/snippet
+            # text (eBay listings usually include "$X.XX" somewhere in
+            # there). If no price pattern is found, price is just omitted
+            # rather than showing a wrong or fabricated number.
+            raw_text = f"{hit.get('title', '')} {hit.get('content', '')}"
+            price_match = re.search(r"\$[\d,]+\.?\d{0,2}", raw_text)
+            out.append({
+                "title": hit.get("title", ""),
+                "url": hit.get("url", ""),
+                "price": price_match.group(0) if price_match else None,
+                "snippet": hit.get("content", ""),
+                "source": "ebay",
+            })
         else:  # news
             out.append({
                 "title": hit.get("title", ""),
@@ -512,6 +529,19 @@ def search_news(q: str = Query(..., min_length=1), limit: int = 20, page: int = 
 @app.get("/search/videos")
 def search_videos(q: str = Query(..., min_length=1), limit: int = 20, page: int = 1):
     results = searxng_category(q, "videos", limit, page)
+    return {"query": q, "page": page, "has_more": len(results) >= limit, "results": results}
+
+
+@app.get("/search/shopping")
+def search_shopping(q: str = Query(..., min_length=1), limit: int = 20, page: int = 1):
+    """
+    Forge Shopping — product listings from eBay (the only real, working
+    product-search engine wired into your SearXNG instance; see the note
+    in searxng/settings.yml for why not Amazon/others). Results link out
+    to the real eBay listing to complete any purchase — this does not
+    process payments or checkouts itself.
+    """
+    results = searxng_category(q, "shopping", limit, page)
     return {"query": q, "page": page, "has_more": len(results) >= limit, "results": results}
 
 
