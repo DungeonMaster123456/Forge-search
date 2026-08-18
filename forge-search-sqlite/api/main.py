@@ -335,7 +335,7 @@ def searxng_category(q: str, category: str, limit: int = 20, page: int = 1, safe
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_MODEL = "openai/gpt-oss-120b"  # llama-3.3-70b-versatile was deprecated by Groq (announced June 2026)
 GROQ_TIMEOUT = 20
 
 
