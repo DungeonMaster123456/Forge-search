@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Human DuckDuckGo Search</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 700px; margin: 50px auto; padding: 0 20px; }
+    input { width: 70%; padding: 10px; font-size: 16px; }
+    button { padding: 10px 18px; font-size: 16px; cursor: pointer; }
+    pre { background: #f4f4f4; padding: 15px; border-radius: 8px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>Human-like DuckDuckGo Search</h1>
+  <p>Free, no login, runs on Cloudflare Pages</p>
+
+  <input id="q" type="text" placeholder="Search something..." value="cool programming languages 2026">
+  <button onclick="search()">Search</button>
+
+  <pre id="out">Results will appear here...</pre>
+
+  <script>
+    async function search() {
+      const q = document.getElementById("q").value;
+      document.getElementById("out").textContent = "Searching...";
+      try {
+        const res = await fetch("/search?q=" + encodeURIComponent(q));
+        const data = await res.json();
+        document.getElementById("out").textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById("out").textContent = "Error: " + err.message;
+      }
+    }
+  </script>
+</body>
+</html>
